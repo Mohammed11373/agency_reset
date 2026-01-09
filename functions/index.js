@@ -84,7 +84,7 @@ async function resetAgencyGiftCoins() {
     const minutes = now.getUTCMinutes();
     const today = now.toISOString().split("T")[0];
 
-    if (libyaHour === 13 && minutes === 0 && lastResetDate !== today) {
+    if (libyaHour === 13 && minutes === 40 && lastResetDate !== today) {
       lastResetDate = today;
 
       console.log("⏳ resetting agency giftCoins (1:00 PM Libya)...");
