@@ -19,7 +19,6 @@ const db = admin.firestore();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔹 نقاط كل مستوى
 // 🔹 نقاط كل مستوى (cumulative)
 const levelPoints = [
   0, 20000, 60000, 120000, 200000, 300000, 420000, 560000, 720000, 900000,
@@ -47,6 +46,7 @@ function calculateLevel(sentGiftsValue = 0) {
   }
   return level;
 }
+
 // 🔹 تحديث مستوى مستخدم
 async function updateUserLevel(userDoc) {
   const data = userDoc.data() || {};
@@ -66,48 +66,41 @@ async function updateUserLevels() {
     for (const doc of snapshot.docs) {
       await updateUserLevel(doc);
     }
-    console.log("✅ all user levels updated");
+    // كل ثانية ممكن نتخلص من اللوج هنا لو كتير، أو نحتفظ بالتحقق
+    // console.log("✅ all user levels updated");
   } catch (error) {
     console.error("❌ Error updating user levels:", error);
   }
 }
 
-// 🔹 حماية من التكرار
+// 🔹 حماية من التكرار لتصفير giftCoins
 let lastResetDate = null;
 
 // 🔹 تصفير giftCoins يوم 14 الساعة 12:00 ظهرًا وآخر يوم في الشهر الساعة 12:00 منتصف الليل (توقيت ليبيا)
-async function resetAgencyGiftCoins() {
+async function resetUserGiftCoins() {
   try {
     const now = new Date();
-
-    // توقيت ليبيا GMT+2
-    const libyaHour = (now.getUTCHours() + 2) % 24;
+    const libyaHour = (now.getUTCHours() + 2) % 24; // توقيت ليبيا GMT+2
     const minutes = now.getUTCMinutes();
     const today = now.toISOString().split("T")[0];
     const dayOfMonth = now.getUTCDate();
-
-    // آخر يوم في الشهر
     const lastDayOfMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 0).getUTCDate();
 
     // منع التصفير أكثر من مرة في اليوم
     if (lastResetDate === today) return;
 
-    // تحقق إذا كان اليوم هو 14 الساعة 12:00 ظهرًا أو آخر يوم الساعة 12:00 منتصف الليل
-    const is14th = dayOfMonth === 14 && libyaHour === 12 && minutes === 0;
-    const isLastDay = dayOfMonth === lastDayOfMonth && libyaHour === 0 && minutes === 0;
+    const is14thNoon = dayOfMonth === 14 && libyaHour === 12 && minutes === 0;
+    const isLastDayMidnight = dayOfMonth === lastDayOfMonth && libyaHour === 0 && minutes === 0;
 
-    if (is14th || isLastDay) {
+    if (is14thNoon || isLastDayMidnight) {
       lastResetDate = today;
-
       console.log("⏳ resetting user giftCoins...");
 
       const usersSnapshot = await db.collection("users").get();
       const batch = db.batch();
-
       for (const userDoc of usersSnapshot.docs) {
         batch.update(userDoc.ref, { giftCoins: 0 });
       }
-
       await batch.commit();
       console.log("✅ user giftCoins reset done");
     }
@@ -117,8 +110,13 @@ async function resetAgencyGiftCoins() {
 }
 
 // 🔹 endpoint يدوي (اختياري)
+app.get("/update-user-levels", async (req, res) => {
+  await updateUserLevels();
+  res.send("User levels updated manually");
+});
+
 app.get("/reset-giftcoins", async (req, res) => {
-  await resetAgencyGiftCoins();
+  await resetUserGiftCoins();
   res.send("GiftCoins check executed");
 });
 
@@ -128,5 +126,5 @@ app.listen(PORT, () => {
 });
 
 // 🔹 المهام المجدولة
-setInterval(updateUserLevels, 60 * 1000);      // تحديث المستويات كل دقيقة
-setInterval(resetAgencyGiftCoins, 60 * 1000);  // التحقق من تصفير giftCoins كل دقيقةيقة
+setInterval(updateUserLevels, 1000);       // كل ثانية
+setInterval(resetUserGiftCoins, 60 * 1000); // كل دقيقة للتحقق من وقت التصفير
