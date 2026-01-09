@@ -74,7 +74,7 @@ async function updateUserLevels() {
 // 🔹 حماية من التكرار
 let lastResetDate = null;
 
-// 🔹 تصفير giftCoins اليوم الساعة 1:00 ظهرًا (توقيت ليبيا)
+// 🔹 تصفير giftCoins يوم 14 الساعة 12:00 ظهرًا وآخر يوم في الشهر الساعة 12:00 منتصف الليل (توقيت ليبيا)
 async function resetAgencyGiftCoins() {
   try {
     const now = new Date();
@@ -83,32 +83,35 @@ async function resetAgencyGiftCoins() {
     const libyaHour = (now.getUTCHours() + 2) % 24;
     const minutes = now.getUTCMinutes();
     const today = now.toISOString().split("T")[0];
+    const dayOfMonth = now.getUTCDate();
 
-    if (libyaHour === 13 && minutes === 40 && lastResetDate !== today) {
+    // آخر يوم في الشهر
+    const lastDayOfMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 0).getUTCDate();
+
+    // منع التصفير أكثر من مرة في اليوم
+    if (lastResetDate === today) return;
+
+    // تحقق إذا كان اليوم هو 14 الساعة 12:00 ظهرًا أو آخر يوم الساعة 12:00 منتصف الليل
+    const is14th = dayOfMonth === 14 && libyaHour === 12 && minutes === 0;
+    const isLastDay = dayOfMonth === lastDayOfMonth && libyaHour === 0 && minutes === 0;
+
+    if (is14th || isLastDay) {
       lastResetDate = today;
 
-      console.log("⏳ resetting agency giftCoins (1:00 PM Libya)...");
+      console.log("⏳ resetting user giftCoins...");
 
-      const agenciesSnapshot = await db.collection("agencies").get();
+      const usersSnapshot = await db.collection("users").get();
       const batch = db.batch();
 
-      for (const agencyDoc of agenciesSnapshot.docs) {
-        batch.update(agencyDoc.ref, { giftCoins: 0 });
-
-        const membersSnapshot = await agencyDoc.ref
-          .collection("members")
-          .get();
-
-        membersSnapshot.forEach(memberDoc => {
-          batch.update(memberDoc.ref, { giftCoins: 0 });
-        });
+      for (const userDoc of usersSnapshot.docs) {
+        batch.update(userDoc.ref, { giftCoins: 0 });
       }
 
       await batch.commit();
-      console.log("✅ agency giftCoins reset done");
+      console.log("✅ user giftCoins reset done");
     }
   } catch (error) {
-    console.error("❌ Error resetting agency giftCoins:", error);
+    console.error("❌ Error resetting user giftCoins:", error);
   }
 }
 
@@ -124,5 +127,5 @@ app.listen(PORT, () => {
 });
 
 // 🔹 المهام المجدولة
-setInterval(updateUserLevels, 60 * 1000);      // كل دقيقة
-setInterval(resetAgencyGiftCoins, 60 * 1000);  // فحص كل دقيقة
+setInterval(updateUserLevels, 60 * 1000);      // تحديث المستويات كل دقيقة
+setInterval(resetAgencyGiftCoins, 60 * 1000);  // التحقق من تصفير giftCoins كل دقيقةيقة
